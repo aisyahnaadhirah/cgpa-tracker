@@ -2,6 +2,17 @@
     <h1 class="text-3xl font-bold text-indigo-700">CGPA Tracker</h1>
     <p class="mt-2 text-slate-600">Rekod keputusan semester dan pantau CGPA anda</p>
 
+    <div class="mt-6 rounded-xl bg-indigo-50 p-5">
+        <h2 class="text-sm font-medium text-indigo-700">CGPA Keseluruhan</h2>
+        <p class="mt-2 text-3xl font-bold text-indigo-900">
+            {{ $cgpa === null ? 'Belum ada CGPA' : number_format($cgpa, 2) }}
+        </p>
+
+        <p class="mt-2 text-sm text-indigo-700">
+            Berdasarkan percubaan pada semester terbaru bagi setiap kod kursus.
+        </p>
+    </div>
+
     @if (session()->has('success'))
         <p role="status" class="mt-4 rounded-lg bg-green-50 p-3 text-green-700">
             {{ session('success') }}

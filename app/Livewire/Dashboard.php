@@ -110,6 +110,7 @@ class Dashboard extends Component
                 ->with('courses')
                 ->orderBy('semester_number')
                 ->get(),
+            'cgpa' => auth()->user()->cgpa(),
         ])->layout('layouts.app');  //susun ikut semester
     }
 }
