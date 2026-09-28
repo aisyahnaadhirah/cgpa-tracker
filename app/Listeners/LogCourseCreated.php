@@ -3,8 +3,8 @@
 namespace App\Listeners;
 
 use App\Events\CourseCreated;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Queue\InteractsWithQueue;
+use App\Jobs\LogCourseCreatedJob;
+
 
 class LogCourseCreated
 {
@@ -21,10 +21,10 @@ class LogCourseCreated
      */
     public function handle(CourseCreated $event): void
     {
-        logger()->info('Kursus baharu berjaya dicipta', [
-            'course_id' => $event->course->id,
-            'course_code' => $event->course->code,
-            'semester_id' => $event->course->semester_id,
-        ]);
+        LogCourseCreatedJob::dispatch(
+            (int) $event->course->id,
+            $event->course->code,
+            (int) $event->course->semester_id,
+        );
     }
 }
