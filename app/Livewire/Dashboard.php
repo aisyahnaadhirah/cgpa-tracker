@@ -3,6 +3,8 @@
 namespace App\Livewire;
 
 use Livewire\Component;
+use Illuminate\Support\Facades\Cache;
+use App\Events\CourseCreated;
 
 class Dashboard extends Component
 {
@@ -139,12 +141,18 @@ class Dashboard extends Component
             $course->semester()->associate($semester);
             $course->save();
 
+            Cache::forget('cgpa_' . auth()->id());
+
             $message = 'Kursus berjaya dikemas kini.';
         } else {
-            $semester->courses()->create($data);
+            $course = $semester->courses()->create($data);
+
+            CourseCreated::dispatch($course);
 
             $message = 'Kursus berjaya ditambah.';
         }
+
+        
 
         $this->reset(
             'selectedSemesterId',
@@ -167,6 +175,8 @@ class Dashboard extends Component
             ->findOrFail($courseId);
 
         $course->delete();
+
+        Cache::forget('cgpa_' . auth()->id());
 
         if ($this->editingCourseId === (int) $course->id) {
             $this->reset(
@@ -191,7 +201,13 @@ class Dashboard extends Component
                 ->with('courses')
                 ->orderBy('semester_number')
                 ->get(),
-            'cgpa' => auth()->user()->cgpa(),
+            'cgpa' => Cache::remember(
+                'cgpa_' . auth()->id(),
+                60,
+                function () {
+                    return auth()->user()->cgpa();
+                }
+            ),
         ])->layout('layouts.app');  //susun ikut semester
     }
 }
