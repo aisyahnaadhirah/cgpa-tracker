@@ -33,4 +33,26 @@ class User extends Authenticatable
     public function semesters(): \Illuminate\Database\Eloquent\Relations\HasMany {
         return $this->hasMany(Semester::class);
     }
+
+    public function cgpa(): ?float {
+        $courses = $this->semesters()
+            ->with('courses')
+            ->orderByDesc('semester_number')
+            ->get()
+            ->flatMap(fn (Semester $semester) => $semester->courses)
+            ->unique('code');
+
+        $totalCredits = (int) $courses->sum('credit_hours');
+
+        if ($totalCredits === 0) {
+            return null;
+        }
+
+        $totalPoints = $courses->sum(
+            fn (Course $course) =>
+                (int) $course->credit_hours * (float) $course->grade_point
+        );
+
+        return $totalPoints / $totalCredits;
+    }
 }
