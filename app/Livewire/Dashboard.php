@@ -4,7 +4,8 @@ namespace App\Livewire;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\Cache;
-use App\Events\CourseCreated;
+use Illuminate\Validation\ValidationException;
+use App\Actions\CreateCourseAction;
 
 class Dashboard extends Component
 {
@@ -90,7 +91,7 @@ class Dashboard extends Component
         $this->grade_point = (string) $course->grade_point;
     }
 
-    public function saveCourse(): void
+    public function saveCourse(CreateCourseAction $createCourse): void
     {
         $this->validate([
             'courseSemesterId' => ['required', 'integer'],
@@ -110,15 +111,14 @@ class Dashboard extends Component
                 ->findOrFail($this->editingCourseId);
         }
 
+        if ($course !== null) {  //UPDATE
         $this->course_code = strtoupper(trim($this->course_code));
         $this->course_name = trim($this->course_name);
 
         $uniqueCode = \Illuminate\Validation\Rule::unique('courses', 'code')
             ->where('semester_id', $semester->id);
 
-        if ($course !== null) {
-            $uniqueCode->ignore($course);
-        }
+        $uniqueCode->ignore($course);
 
         $validated = $this->validate([
             'course_code' => ['required', 'string', 'max:20', $uniqueCode],
@@ -136,7 +136,7 @@ class Dashboard extends Component
             'grade_point' => $validated['grade_point'],
         ];
 
-        if ($course !== null) {
+        
             $course->fill($data);
             $course->semester()->associate($semester);
             $course->save();
@@ -144,16 +144,32 @@ class Dashboard extends Component
             Cache::forget('cgpa_' . auth()->id());
 
             $message = 'Kursus berjaya dikemas kini.';
-        } else {
-            $course = $semester->courses()->create($data);
+        } else { //CREATE
+            try {
+                $course = $createCourse->handle($semester, [
+                    'code' => $this->course_code,
+                    'name' => $this->course_name,
+                    'credit_hours' => $this->credit_hours,
+                    'grade_point' => $this->grade_point,
+                ]);
+            } catch (ValidationException $exception) {
+                $fieldNames = [
+                    'code' => 'course_code',
+                    'name' => 'course_name',
+                ];
+                $errors = [];
 
-            CourseCreated::dispatch($course);
+                foreach ($exception->errors() as $field => $messages) {
+                    $errors[$fieldNames[$field] ?? $field] = $messages;
+                }
+
+                throw ValidationException::withMessages($errors);
+            }
 
             $message = 'Kursus berjaya ditambah.';
         }
 
-        
-
+        //dedua guna untuk reset borang dan papar mesej success
         $this->reset(
             'selectedSemesterId',
             'editingCourseId',
