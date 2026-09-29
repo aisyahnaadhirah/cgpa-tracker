@@ -19,12 +19,14 @@
         </p>
     @endif
         
-    <button
+    <flux:button
         type="button"
+        variant="primary"
+        color="indigo"
         wire:click="$toggle('showSemesterForm')"
-        class="mt-6 rounded-lg bg-indigo-600 px-4 py-2 text-white">
+        class="mt-6">
         {{ $showSemesterForm ? 'Tutup Borang' : 'Tambah Semester' }}
-    </button>
+    </flux:button>
 
     @if ($showSemesterForm)
         <form wire:submit="saveSemester" class="mt-4 space-y-4 rounded-lg bg-white p-6">
@@ -64,13 +66,15 @@
                 @enderror
             </div>
 
-            <button
+            <flux:button
                 type="submit"
+                variant="primary"
+                color="indigo"
                 wire:loading.attr="disabled"
                 wire:target="saveSemester"
-                class="rounded-lg bg-indigo-600 px-4 py-2 text-white disabled:opacity-50">
+                >
                 Save Semester
-            </button>
+            </flux:button>
         </form>
     @endif
 
@@ -88,7 +92,7 @@
                     </p>
 
                     @php
-                        //panggil pengiraan GPA dari Models
+                        //panggil pengiraan GPA dari Modelsl 
                         $gpa = $semester->gpa();
                     @endphp
 
@@ -144,12 +148,14 @@
                         </table>
                     </div>
 
-                    <button
+                    <flux:button
                         type="button"
+                        variant="primary"
+                        color="indigo"
                         wire:click="openCourseForm({{ $semester->id }})"
-                        class="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-white">
+                        class="mt-3">
                         Add Course
-                    </button>
+                    </flux:button>
 
                     @if ($selectedSemesterId === (int) $semester->id)
                         <form
