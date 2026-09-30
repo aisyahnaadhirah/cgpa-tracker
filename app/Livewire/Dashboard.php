@@ -2,40 +2,56 @@
 
 namespace App\Livewire;
 
-use Livewire\Component;
+use App\Actions\CreateCourseAction;
+use App\Actions\DeleteCourseAction;
+use App\Actions\UpdateCourseAction;
+use App\Models\Course;
 use Illuminate\Support\Facades\Cache;
-use App\Events\CourseCreated;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Livewire\Component;
 
 class Dashboard extends Component
 {
     public string $academic_year = '';
+
     public string $semester_number = '';
+
     public bool $showSemesterForm = false;
+
     public ?int $selectedSemesterId = null;
+
     public ?int $editingCourseId = null;
+
     public string $courseSemesterId = '';
+
     public string $course_code = '';
+
     public string $course_name = '';
+
     public string $credit_hours = '';
+
     public string $grade_point = '';
 
-    protected function rules(): array {
+    protected function rules(): array
+    {
         return [
             'academic_year' => [
                 'required',
-                'regex:/^[0-9]{4}\/[0-9]{4}$/', 
-            ],  //untuk format tahun jadi 2026/2027
+                'regex:/^[0-9]{4}\/[0-9]{4}$/',
+            ],  // untuk format tahun jadi 2026/2027
             'semester_number' => [
                 'required',
                 'integer',
                 'between:1,8',
-                \Illuminate\Validation\Rule::unique('semesters', 'semester_number')
+                Rule::unique('semesters', 'semester_number')
                     ->where('user_id', auth()->id()),
-            ],  //no semester 1-8 dan pastikan no semester tak digunakan lagi oleh user yang tengah login ni
+            ],  // no semester 1-8 dan pastikan no semester tak digunakan lagi oleh user yang tengah login ni
         ];
     }
 
-    public function saveSemester(): void {
+    public function saveSemester(): void
+    {
         $validated = $this->validate();
 
         auth()->user()->semesters()->create([
@@ -72,7 +88,7 @@ class Dashboard extends Component
 
     public function openEditCourse(int $courseId): void
     {
-        $course = \App\Models\Course::query()
+        $course = Course::query()
             ->whereHas('semester', function ($query) {
                 $query->where('user_id', auth()->id());
             })
@@ -90,7 +106,7 @@ class Dashboard extends Component
         $this->grade_point = (string) $course->grade_point;
     }
 
-    public function saveCourse(): void
+    public function saveCourse(CreateCourseAction $createCourse, UpdateCourseAction $updateCourse): void
     {
         $this->validate([
             'courseSemesterId' => ['required', 'integer'],
@@ -103,57 +119,63 @@ class Dashboard extends Component
         $course = null;
 
         if ($this->editingCourseId !== null) {
-            $course = \App\Models\Course::query()
+            $course = Course::query()
                 ->whereHas('semester', function ($query) {
                     $query->where('user_id', auth()->id());
                 })
                 ->findOrFail($this->editingCourseId);
         }
 
-        $this->course_code = strtoupper(trim($this->course_code));
-        $this->course_name = trim($this->course_name);
+        if ($course !== null) {  // UPDATE
 
-        $uniqueCode = \Illuminate\Validation\Rule::unique('courses', 'code')
-            ->where('semester_id', $semester->id);
+            try {
+                $course = $updateCourse->handle($course, $semester, [
+                    'code' => $this->course_code,
+                    'name' => $this->course_name,
+                    'credit_hours' => $this->credit_hours,
+                    'grade_point' => $this->grade_point,
+                ]);
+            } catch (ValidationException $exception) {
+                $fieldNames = [
+                    'code' => 'course_code',
+                    'name' => 'course_name',
+                ];
+                $errors = [];
 
-        if ($course !== null) {
-            $uniqueCode->ignore($course);
-        }
+                foreach ($exception->errors() as $field => $messages) {
+                    $errors[$fieldNames[$field] ?? $field] = $messages;
+                }
 
-        $validated = $this->validate([
-            'course_code' => ['required', 'string', 'max:20', $uniqueCode],
-            'course_name' => ['required', 'string', 'max:150'],
-            'credit_hours' => ['required', 'integer', 'min:1', 'max:65535'],
-            'grade_point' => [
-                'required', 'numeric', 'between:0,4', 'decimal:0,2',
-            ],
-        ]);
-
-        $data = [
-            'code' => $validated['course_code'],
-            'name' => $validated['course_name'],
-            'credit_hours' => (int) $validated['credit_hours'],
-            'grade_point' => $validated['grade_point'],
-        ];
-
-        if ($course !== null) {
-            $course->fill($data);
-            $course->semester()->associate($semester);
-            $course->save();
-
-            Cache::forget('cgpa_' . auth()->id());
-
+                throw ValidationException::withMessages($errors);
+            }
             $message = 'Kursus berjaya dikemas kini.';
-        } else {
-            $course = $semester->courses()->create($data);
 
-            CourseCreated::dispatch($course);
+        } else { // CREATE
+            try {
+                $course = $createCourse->handle($semester, [
+                    'code' => $this->course_code,
+                    'name' => $this->course_name,
+                    'credit_hours' => $this->credit_hours,
+                    'grade_point' => $this->grade_point,
+                ]);
+            } catch (ValidationException $exception) {
+                $fieldNames = [
+                    'code' => 'course_code',
+                    'name' => 'course_name',
+                ];
+                $errors = [];
+
+                foreach ($exception->errors() as $field => $messages) {
+                    $errors[$fieldNames[$field] ?? $field] = $messages;
+                }
+
+                throw ValidationException::withMessages($errors);
+            }
 
             $message = 'Kursus berjaya ditambah.';
         }
 
-        
-
+        // dedua guna untuk reset borang dan papar mesej success
         $this->reset(
             'selectedSemesterId',
             'editingCourseId',
@@ -167,16 +189,15 @@ class Dashboard extends Component
         session()->flash('success', $message);
     }
 
-    public function deleteCourse(int $courseId): void {
-        $course = \App\Models\Course::query()
+    public function deleteCourse(DeleteCourseAction $deleteCourse, int $courseId): void
+    {
+        $course = Course::query()
             ->whereHas('semester', function ($query) {
                 $query->where('user_id', auth()->id());
             })
             ->findOrFail($courseId);
 
-        $course->delete();
-
-        Cache::forget('cgpa_' . auth()->id());
+        $deleteCourse->handle($course);
 
         if ($this->editingCourseId === (int) $course->id) {
             $this->reset(
@@ -202,12 +223,12 @@ class Dashboard extends Component
                 ->orderBy('semester_number')
                 ->get(),
             'cgpa' => Cache::remember(
-                'cgpa_' . auth()->id(),
+                'cgpa_'.auth()->id(),
                 60,
                 function () {
                     return auth()->user()->cgpa();
                 }
             ),
-        ])->layout('layouts.app');  //susun ikut semester
+        ])->layout('layouts.app');  // susun ikut semester
     }
 }
